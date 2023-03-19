@@ -1,0 +1,73 @@
+#include <ros/ros.h>
+#include <actionlib/client/simple_action_client.h>
+#include <actionlib/client/terminal_state.h>
+#include <my_package/FibonacciAction.h>
+
+class MyROSNode {
+public:
+    MyROSNode() {
+        // Constructor
+        // Initialize the node handle
+        nh_ = ros::NodeHandle("~");
+        
+        // Set up the publisher, subscriber, and action client
+        pub_ = nh_.advertise<std_msgs::String>("topic_name", 10);
+        sub_ = nh_.subscribe("topic_name", 10, &MyROSNode::subCallback, this);
+        ac_ = new actionlib::SimpleActionClient<my_package::FibonacciAction>("fibonacci", true);
+        ROS_INFO("Waiting for action server to start.");
+        ac_->waitForServer();
+        ROS_INFO("Action server started.");
+    }
+
+    void subCallback(const std_msgs::String::ConstPtr& msg) {
+        // Subscriber callback function
+        ROS_INFO("Received message: %s", msg->data.c_str());
+    }
+
+    void publishMessage() {
+        // Publisher function
+        std_msgs::String msg;
+        msg.data = "Hello, world!";
+        pub_.publish(msg);
+    }
+
+    void fibonacciAction() {
+        // Action client function
+        ROS_INFO("Sending goal...");
+        my_package::FibonacciGoal goal;
+        goal.order = 10;
+        ac_->sendGoal(goal);
+
+        // Wait for the action to finish
+        bool finished_before_timeout = ac_->waitForResult(ros::Duration(30.0));
+
+        if (finished_before_timeout) {
+            actionlib::SimpleClientGoalState state = ac_->getState();
+            ROS_INFO("Action finished: %s", state.toString().c_str());
+            my_package::FibonacciResultConstPtr result = ac_->getResult();
+            ROS_INFO("Result: %d", result->sequence.back());
+        } else {
+            ROS_INFO("Action did not finish before the timeout.");
+        }
+    }
+
+private:
+    ros::NodeHandle nh_;
+    ros::Publisher pub_;
+    ros::Subscriber sub_;
+    actionlib::SimpleActionClient<my_package::FibonacciAction>* ac_;
+};
+
+int main(int argc, char** argv) {
+    ros::init(argc, argv, "my_node");
+    MyROSNode node;
+    ros::Rate loop_rate(10); // 10 Hz
+    while (ros::ok()) {
+        node.publishMessage();
+        node.fibonacciAction();
+        ros::spinOnce();
+        loop_rate.sleep();
+    }
+    return 0;
+}
+
